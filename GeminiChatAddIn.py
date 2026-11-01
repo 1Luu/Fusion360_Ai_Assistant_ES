@@ -16,10 +16,10 @@ indice_rotacion = {p: 0 for p in PROVEEDORES_LISTA + ("auto",)}
 modelos_gemini_descubiertos = []
 keys_sin_saldo_o_invalidas = set()
 
-CMD_ID = "GeminiPaletteBtn_V82_ID"
+CMD_ID = "GeminiPaletteBtn_V84_ID"
 CMD_NAME = "Asistente Multi-IA CAD"
-CMD_DESC = "Muestra u oculta el panel lateral de modelado asistido por IA (v8.2 Macro-Vault)"
-PALETTE_ID = "MultiIAChatPalette_V82_ID"
+CMD_DESC = "Muestra u oculta el panel lateral de modelado asistido por IA (v8.4 Full-Toolkit)"
+PALETTE_ID = "MultiIAChatPalette_V84_ID"
 
 CARPETA_USUARIO = os.path.expanduser("~")
 RUTA_PERMANENTE_JSON = os.path.join(CARPETA_USUARIO, ".fusion360_multi_ia_keys.json")
@@ -44,8 +44,18 @@ MODELOS_OPENROUTER = [
     "meta-llama/llama-3.3-70b-instruct:free"
 ]
 
-# Plantillas iniciales para usar con 0 tokens desde el primer arranque
+# Plantillas iniciales con Kit Completo (incluye Rosca 3D y Agujero en Cruz)
 MACROS_INICIALES = [
+    {
+        "nombre": "Rosca 3D Automática (Agujero/Eje)",
+        "prompt": "Ponle hilo / rosca 3D modelada al agujero o cilindro seleccionado (o al agujero principal de la pieza)",
+        "codigo": "aplicar_rosca(modelada=True)"
+    },
+    {
+        "nombre": "Agujero en Cruz Pasante (R2mm)",
+        "prompt": "Hace un agujero en cruz a la mitad de la altura que atraviese todos los lados de las 4 direcciones de radio 2",
+        "codigo": "perforar_cruz_3d(radio_mm=2.0)"
+    },
     {
         "nombre": "Brida Mecánica (6 pernos)",
         "prompt": "Crea una brida circular base diámetro 100mm espesor 12mm, cuello central diámetro 50mm altura total 35mm, perforación central pasante de 30mm y 6 agujeros de 10mm en círculo de paso de 75mm",
@@ -59,18 +69,15 @@ MACROS_INICIALES = [
             "    px = 37.5 * math.cos(ang)\n"
             "    py = 37.5 * math.sin(ang)\n"
             "    circles.addByCenterRadius(adsk.core.Point3D.create(u(px), u(py), 0), u(5))\n"
-            "perfiles_base = adsk.core.ObjectCollection.create()\n"
-            "for p in sk.profiles:\n"
-            "    if p.areaProperties().area > (math.pi * (u(20)**2)):\n"
-            "        perfiles_base.add(p)\n"
+            "prof_base = max([p for p in sk.profiles], key=lambda p: p.profileLoops.count)\n"
             "ext = rootComp.features.extrudeFeatures\n"
-            "ext.addSimple(perfiles_base, adsk.core.ValueInput.createByReal(u(12)), adsk.fusion.FeatureOperations.NewBodyFeatureOperation)\n"
+            "ext.addSimple(prof_base, adsk.core.ValueInput.createByReal(u(12)), adsk.fusion.FeatureOperations.NewBodyFeatureOperation)\n"
             "sk2 = rootComp.sketches.add(rootComp.xYConstructionPlane)\n"
             "c2 = sk2.sketchCurves.sketchCircles\n"
             "c2.addByCenterRadius(adsk.core.Point3D.create(0, 0, 0), u(25))\n"
             "c2.addByCenterRadius(adsk.core.Point3D.create(0, 0, 0), u(15))\n"
             "for p in sk2.profiles:\n"
-            "    if p.sketchLoops.count == 2:\n"
+            "    if p.profileLoops.count == 2:\n"
             "        ext.addSimple(p, adsk.core.ValueInput.createByReal(u(35)), adsk.fusion.FeatureOperations.JoinFeatureOperation)"
         )
     },
@@ -106,7 +113,7 @@ MACROS_INICIALES = [
 
 
 # ==============================================================================
-# GESTIÓN DE BIBLIOTECA DE GEOMETRÍAS (0 TOKENS)
+# GESTIÓN DE BIBLIOTECA DE GEOMETRÍAS (0 TOKENS) CON AUTO-MIGRACIÓN
 # ==============================================================================
 def cargar_biblioteca_macros():
     if os.path.exists(RUTA_MACROS_JSON):
@@ -114,6 +121,22 @@ def cargar_biblioteca_macros():
             with open(RUTA_MACROS_JSON, "r", encoding="utf-8") as f:
                 datos = json.load(f)
                 if isinstance(datos, list) and len(datos) > 0:
+                    modificado = False
+                    for m in datos:
+                        cod = m.get("codigo", "")
+                        if "sketchLoops" in cod:
+                            m["codigo"] = cod.replace("sketchLoops", "profileLoops")
+                            modificado = True
+                        if m.get("nombre") == "Brida Mecánica (6 pernos)" and "perfiles_base" in cod:
+                            m["codigo"] = MACROS_INICIALES[2]["codigo"]
+                            modificado = True
+                    nombres_actuales = {m.get("nombre") for m in datos}
+                    for m_ini in MACROS_INICIALES:
+                        if m_ini["nombre"] not in nombres_actuales:
+                            datos.insert(0, m_ini)
+                            modificado = True
+                    if modificado:
+                        guardar_biblioteca_macros(datos)
                     return datos
         except:
             pass
@@ -354,7 +377,7 @@ def obtener_modelos_gemini_activos(api_key):
         cabeceras = {
             "x-goog-api-key": api_key,
             "Connection": "close",
-            "User-Agent": "Fusion360CAD/8.2"
+            "User-Agent": "Fusion360CAD/8.4"
         }
         conn.request("GET", "/v1beta/models", headers=cabeceras)
         res = conn.getresponse()
@@ -397,7 +420,7 @@ def obtener_modelos_gemini_activos(api_key):
 
 
 # ==============================================================================
-# INTERFAZ GRÁFICA HTML/CSS/JS (v8.2 Macro-Vault)
+# INTERFAZ GRÁFICA HTML/CSS/JS (v8.4 Full-Toolkit)
 # ==============================================================================
 HTML_CONTENT = r"""<!DOCTYPE html>
 <html lang="es">
@@ -407,7 +430,7 @@ HTML_CONTENT = r"""<!DOCTYPE html>
     * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
     body { margin: 0; padding: 10px; background: #22252a; color: #e8eaed; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
     .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 6px; border-bottom: 1px solid #3c4043; font-size: 12px; color: #9aa0a6; gap: 5px; }
-    .badge-v82 { background: #004d40; color: #80cbc4; border: 1px solid #26a69a; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+    .badge-v84 { background: #1a237e; color: #8c9eff; border: 1px solid #536dfe; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; white-space: nowrap; }
     select { background: #181a1d; color: #e8eaed; border: 1px solid #3c4043; border-radius: 4px; padding: 4px 6px; font-size: 11px; flex: 1; outline: none; font-weight: 600; }
     select:focus { border-color: #0696d7; }
     .btn-small { background: #3c4043; color: #e8eaed; border: none; padding: 4px 7px; border-radius: 4px; cursor: pointer; font-size: 11px; white-space: nowrap; }
@@ -465,7 +488,7 @@ HTML_CONTENT = r"""<!DOCTYPE html>
 </head>
 <body>
     <div class="header">
-        <span class="badge-v82">v8.2 Macro-Vault</span>
+        <span class="badge-v84">v8.4 Full-Toolkit</span>
         <select id="provider-select" onchange="cambiarProveedor()">
             <option value="gemini" selected>Google Gemini (Flash + Lite)</option>
             <option value="groq">⚡ Groq (Llama 3.3 70B / Gratis)</option>
@@ -494,9 +517,9 @@ HTML_CONTENT = r"""<!DOCTYPE html>
     </div>
 
     <div id="chat-box">
-        <div class="msg bot" id="welcome-msg"><span class="welcome-title">👋 Cómo usar el Asistente CAD:</span>1. Elige tu IA arriba o ejecuta directo una pieza de la barra <b>📚 0-Tokens</b>.
-2. <b>Opcional:</b> Selecciona con el mouse caras o aristas para modificarlas.
-3. En cualquier respuesta, abre <b>👁️ Ver Código Python</b> para auditar el script o guardarlo con <b>💾 Guardar 0-Tokens</b>.<div class="divider"></div><span class="updates-title">🚀 Novedades en v8.2 Macro-Vault:</span><ul class="updates-list"><li><b>Biblioteca Local (0 Tokens):</b> Guarda scripts de geometrías complejas y ejecútalos en 0,05s sin gastar cuota de API.</li><li><b>Visor de Código + Copiado Seguro:</b> Audita y copia el código Python generado en cada mensaje.</li><li><b>Salto Anti-503 + Auto-Fix:</b> Rotación automática hacia <i>flash-lite</i>, Groq y OpenRouter.</li></ul></div>
+        <div class="msg bot" id="welcome-msg"><span class="welcome-title">👋 Cómo usar el Asistente CAD:</span>1. Elige tu IA arriba o ejecuta directo una operación de la barra <b>📚 0-Tokens</b>.
+2. <b>Opcional:</b> Selecciona con el mouse caras, agujeros o aristas para modificarlos.
+3. En cualquier respuesta, abre <b>👁️ Ver Código Python</b> para auditar o guardar con <b>💾 Guardar 0-Tokens</b>.<div class="divider"></div><span class="updates-title">🚀 Novedades en v8.4 Full-Toolkit:</span><ul class="updates-list"><li><b>Motor Nativo de Roscas 3D (`aplicar_rosca`):</b> Crea hilos/roscas ISO reales en agujeros o pernos sin errores de tupla.</li><li><b>Perforación 3D Directa (`perforar_cruz_3d` / `cortar_pasante`):</b> Cortes pasantes simétricos y agujeros en cruz inmunes a ejes invertidos.</li><li><b>Telemetría Espacial Exacta:</b> La IA conoce el centro `(cx, cy, cz)` y todos los agujeros de tu pieza.</li></ul></div>
     </div>
     <div class="input-area">
         <textarea id="prompt" placeholder="Selecciona algo con el mouse o escribe qué modelar..."></textarea>
@@ -655,7 +678,6 @@ HTML_CONTENT = r"""<!DOCTYPE html>
             codeHead.appendChild(titleSpan);
             codeHead.appendChild(actionsDiv);
 
-            // Cajón inline para nombrar y guardar la geometría sin usar popups bloqueables
             const saveDrawer = document.createElement('div');
             saveDrawer.className = 'save-drawer';
 
@@ -979,7 +1001,7 @@ HTML_CONTENT = r"""<!DOCTYPE html>
                                 content:
                                     'EL CÓDIGO ANTERIOR FALLÓ AL EJECUTARSE EN FUSION 360 (los cambios parciales fueron revertidos).\n' +
                                     'ERROR EXACTO:\n' + execRes.traceback_completo + '\n\n' +
-                                    'Corrige el código usando la API de Fusion 360 y devuelve ÚNICAMENTE el código Python completo corregido.'
+                                    'RECUERDA: Para roscas usa directamente `aplicar_rosca(modelada=True)`. Para agujeros en cruz usa `perforar_cruz_3d(radio_mm=...)` o `cortar_cilindro_3d(p1_mm, p2_mm, radio_mm)`. Devuelve ÚNICAMENTE el código Python corregido.'
                             });
                             await pausaUI(500);
                         }
@@ -1059,7 +1081,7 @@ HTML_CONTENT = r"""<!DOCTYPE html>
 
 
 # ==============================================================================
-# LECTURA DEL DISEÑO, SELECCIÓN CON MOUSE Y REVERSIÓN DE FALLOS PARCIALES
+# LECTURA DEL DISEÑO, TELEMETRÍA ESPACIAL Y KIT DE HERRAMIENTAS CAD NATIVO
 # ==============================================================================
 def capturar_selecciones_mouse(ui):
     sel_all = []
@@ -1082,11 +1104,15 @@ def capturar_selecciones_mouse(ui):
                 pt = face.pointOnFace
                 px, py, pz = round(pt.x * 10, 2), round(pt.y * 10, 2), round(pt.z * 10, 2)
                 geom_tipo = face.geometry.objectType.split("::")[-1]
+                extra_cil = ""
+                if "Cylinder" in geom_tipo:
+                    cil = adsk.core.Cylinder.cast(face.geometry)
+                    extra_cil = f", radio={round(cil.radius * 10, 2)}mm"
                 area_mm2 = round(face.area * 100, 1)
                 cuerpo_nom = face.body.name if face.body else "Cuerpo"
                 descripciones.append(
-                    f"sel_faces[{len(sel_faces)-1}]: Cara ({geom_tipo}) en '{cuerpo_nom}', "
-                    f"punto ref=({px}, {py}, {pz}), área={area_mm2}"
+                    f"sel_faces[{len(sel_faces)-1}]: Cara ({geom_tipo}{extra_cil}) en '{cuerpo_nom}', "
+                    f"punto ref=({px}, {py}, {pz})mm, área={area_mm2}mm2"
                 )
 
             elif "BRepEdge" in tipo:
@@ -1098,7 +1124,7 @@ def capturar_selecciones_mouse(ui):
                 geom_tipo = edge.geometry.objectType.split("::")[-1]
                 descripciones.append(
                     f"sel_edges[{len(sel_edges)-1}]: Arista ({geom_tipo}), "
-                    f"largo={largo_mm}, punto ref=({px}, {py}, {pz})"
+                    f"largo={largo_mm}mm, punto ref=({px}, {py}, {pz})mm"
                 )
 
             elif "BRepBody" in tipo:
@@ -1110,7 +1136,7 @@ def capturar_selecciones_mouse(ui):
                 sel_vertices.append(ent)
                 pt = ent.geometry
                 px, py, pz = round(pt.x * 10, 2), round(pt.y * 10, 2), round(pt.z * 10, 2)
-                descripciones.append(f"sel_vertices[{len(sel_vertices)-1}]: Punto/Vértice en ({px}, {py}, {pz})")
+                descripciones.append(f"sel_vertices[{len(sel_vertices)-1}]: Punto/Vértice en ({px}, {py}, {pz})mm")
 
             else:
                 descripciones.append(f"sel[{i}]: Entidad tipo {tipo.split('::')[-1]}")
@@ -1130,6 +1156,250 @@ def capturar_selecciones_mouse(ui):
         "sel_vertices": sel_vertices
     }
     return diccionario_variables, texto_seleccion, len(sel_all)
+
+
+def es_cara_cilindrica_interna(face):
+    """Detecta matemáticamente si una cara cilíndrica es un agujero interno (True) o un eje externo (False)."""
+    try:
+        cil = adsk.core.Cylinder.cast(face.geometry)
+        if not cil:
+            return False
+        eva = face.evaluator
+        _, param = eva.getParameterAtPoint(face.pointOnFace)
+        _, normal = eva.getNormalAtParameter(param)
+        # Vector desde el origen del eje del cilindro hacia el punto en la cara
+        vec_radial = cil.origin.vectorTo(face.pointOnFace)
+        # Proyectar perpendicularmente al eje del cilindro
+        eje = cil.axis.copy()
+        eje.normalize()
+        comp_axial = eje.copy()
+        comp_axial.scaleBy(vec_radial.dotProduct(eje))
+        vec_perp = vec_radial.copy()
+        vec_perp.subtract(comp_axial)
+        # Si la normal de la cara apunta hacia adentro (opuesta al radio), es un agujero interno
+        return normal.dotProduct(vec_perp) < 0
+    except:
+        return True
+
+
+def crear_kit_herramientas_cad(app, ui, design, rootComp, vars_seleccion):
+    """
+    Construye el kit completo de herramientas de alto nivel para que la IA tenga
+    acceso directo y sin fallos a roscas 3D, perforaciones en cruz, cortes simétricos y primitivas BRep.
+    """
+    u = lambda valor: float(valor) * 0.1
+    sel_faces = vars_seleccion["sel_faces"]
+    sel_edges = vars_seleccion["sel_edges"]
+    sel_bodies = vars_seleccion["sel_bodies"]
+
+    def obtener_cuerpo_objetivo(cuerpo=None):
+        if cuerpo:
+            return cuerpo
+        if len(sel_bodies) > 0:
+            return sel_bodies[0]
+        if len(sel_faces) > 0 and sel_faces[0].body:
+            return sel_faces[0].body
+        if rootComp.bRepBodies.count > 0:
+            return rootComp.bRepBodies.item(rootComp.bRepBodies.count - 1)
+        raise Exception("No hay ningún cuerpo sólido 3D en el diseño para modificar.")
+
+    def insertar_cuerpo_temporal(temp_body):
+        if design.designType == adsk.fusion.DesignTypes.ParametricDesignType:
+            bf = rootComp.features.baseFeatures.add()
+            bf.startEdit()
+            rootComp.bRepBodies.add(temp_body, bf)
+            bf.finishEdit()
+            return bf.bodies.item(0)
+        else:
+            return rootComp.bRepBodies.add(temp_body)
+
+    def cortar_con_cuerpo_temporal(temp_body, cuerpo_destino=None):
+        positivos = [b for b in rootComp.bRepBodies if b.isSolid and b.isVisible]
+        if cuerpo_destino:
+            positivos = [cuerpo_destino]
+        if not positivos:
+            raise Exception("No se encontró ningún cuerpo sólido activo para perforar.")
+
+        tbm = adsk.fusion.TemporaryBRepManager.get()
+        for idx, b_dest in enumerate(positivos):
+            copia_temp = tbm.copy(temp_body) if idx > 0 else temp_body
+            herramienta = insertar_cuerpo_temporal(copia_temp)
+            col = adsk.core.ObjectCollection.create()
+            col.add(herramienta)
+            comb = rootComp.features.combineFeatures
+            c_in = comb.createInput(b_dest, col)
+            c_in.operation = adsk.fusion.FeatureOperations.CutFeatureOperation
+            c_in.isKeepToolBodies = False
+            comb.add(c_in)
+
+    def cortar_cilindro_3d(p1_mm, p2_mm, radio_mm, cuerpo=None):
+        """Perfora un agujero cilíndrico exacto entre dos puntos 3D (x,y,z) en mm."""
+        tbm = adsk.fusion.TemporaryBRepManager.get()
+        pt1 = adsk.core.Point3D.create(u(p1_mm[0]), u(p1_mm[1]), u(p1_mm[2]))
+        pt2 = adsk.core.Point3D.create(u(p2_mm[0]), u(p2_mm[1]), u(p2_mm[2]))
+        cil = tbm.createCylinderOrCone(pt1, u(radio_mm), pt2, u(radio_mm))
+        cortar_con_cuerpo_temporal(cil, cuerpo)
+
+    def perforar_cruz_3d(radio_mm=2.0, z_mm=None, cuerpo=None):
+        """
+        Hace un agujero en cruz pasante en las 4 direcciones horizontales (ejes X e Y)
+        pasando exactamente por el centro del cuerpo y a la altura z_mm (por defecto a mitad de altura).
+        """
+        b_dest = obtener_cuerpo_objetivo(cuerpo)
+        bb = b_dest.boundingBox
+        min_x, min_y, min_z = bb.minPoint.x * 10.0, bb.minPoint.y * 10.0, bb.minPoint.z * 10.0
+        max_x, max_y, max_z = bb.maxPoint.x * 10.0, bb.maxPoint.y * 10.0, bb.maxPoint.z * 10.0
+        cx = (min_x + max_x) / 2.0
+        cy = (min_y + max_y) / 2.0
+        cz = float(z_mm) if z_mm is not None else ((min_z + max_z) / 2.0)
+        margen = max(max_x - min_x, max_y - min_y, 20.0) + 10.0
+
+        tbm = adsk.fusion.TemporaryBRepManager.get()
+        # Cilindro a lo largo del eje X (atraviesa caras izquierda y derecha)
+        p1_x = adsk.core.Point3D.create(u(cx - margen), u(cy), u(cz))
+        p2_x = adsk.core.Point3D.create(u(cx + margen), u(cy), u(cz))
+        cil_x = tbm.createCylinderOrCone(p1_x, u(radio_mm), p2_x, u(radio_mm))
+
+        # Cilindro a lo largo del eje Y (atraviesa caras frontal y trasera)
+        p1_y = adsk.core.Point3D.create(u(cx), u(cy - margen), u(cz))
+        p2_y = adsk.core.Point3D.create(u(cx), u(cy + margen), u(cz))
+        cil_y = tbm.createCylinderOrCone(p1_y, u(radio_mm), p2_y, u(radio_mm))
+
+        # Unir ambos cilindros en una sola cruz 3D y perforar el cuerpo de una sola vez
+        tbm.booleanOperation(cil_x, cil_y, adsk.fusion.BooleanTypes.UnionBooleanType)
+        cortar_con_cuerpo_temporal(cil_x, b_dest)
+        return b_dest
+
+    def cortar_pasante(perfil_o_coleccion, distancia_mm=500.0):
+        """Realiza un corte extruido simétrico hacia ambos lados atravesando todos los cuerpos sólidos."""
+        ext = rootComp.features.extrudeFeatures
+        ext_in = ext.createInput(perfil_o_coleccion, adsk.fusion.FeatureOperations.CutFeatureOperation)
+        ext_in.setSymmetricExtent(adsk.core.ValueInput.createByReal(u(distancia_mm)), True)
+        cuerpos_activos = [b for b in rootComp.bRepBodies if b.isSolid and b.isVisible]
+        if cuerpos_activos:
+            ext_in.participantBodies = cuerpos_activos
+        return ext.add(ext_in)
+
+    def aplicar_rosca(cara_o_radio_mm=None, modelada=True, interna=None, paso_completo=True):
+        """
+        Aplica hilo/rosca 3D ISO Métrica a una cara cilíndrica (agujero o perno).
+        Si no se pasa una cara ni hay selección con el mouse, busca automáticamente el agujero en la pieza.
+        """
+        tf = rootComp.features.threadFeatures
+        tdq = tf.threadDataQuery
+        caras_objetivo = []
+
+        # 1. Si se pasó una BRepFace directamente
+        if cara_o_radio_mm is not None and hasattr(cara_o_radio_mm, "geometry"):
+            if "Cylinder" in cara_o_radio_mm.geometry.objectType:
+                caras_objetivo.append(cara_o_radio_mm)
+
+        # 2. Si el usuario seleccionó caras con el mouse
+        if not caras_objetivo and len(sel_faces) > 0:
+            for f in sel_faces:
+                if "Cylinder" in f.geometry.objectType:
+                    caras_objetivo.append(f)
+
+        # 3. Si el usuario seleccionó un borde circular con el mouse
+        if not caras_objetivo and len(sel_edges) > 0:
+            for e in sel_edges:
+                for f in e.faces:
+                    if "Cylinder" in f.geometry.objectType and f not in caras_objetivo:
+                        caras_objetivo.append(f)
+
+        # 4. Búsqueda automática de agujeros cilíndricos en los cuerpos actuales
+        if not caras_objetivo:
+            internas = []
+            externas = []
+            radio_filtro = float(cara_o_radio_mm) if isinstance(cara_o_radio_mm, (int, float)) else None
+            for b in rootComp.bRepBodies:
+                if not b.isVisible:
+                    continue
+                for f in b.faces:
+                    if "Cylinder" in f.geometry.objectType:
+                        cil = adsk.core.Cylinder.cast(f.geometry)
+                        r_mm = cil.radius * 10.0
+                        if radio_filtro is not None and abs(r_mm - radio_filtro) > 0.6:
+                            continue
+                        if es_cara_cilindrica_interna(f):
+                            internas.append(f)
+                        else:
+                            externas.append(f)
+            if internas:
+                # Si el agujero está dividido en mitades pero comparte el mismo radio y eje, toma la mayor cara interna
+                internas.sort(key=lambda x: x.area, reverse=True)
+                caras_objetivo.append(internas[0])
+            elif externas:
+                externas.sort(key=lambda x: x.area, reverse=True)
+                caras_objetivo.append(externas[0])
+
+        if not caras_objetivo:
+            raise Exception("No se encontró ningún agujero o cara cilíndrica para aplicar la rosca.")
+
+        cara_ref = caras_objetivo[0]
+        cil_geom = adsk.core.Cylinder.cast(cara_ref.geometry)
+        diam_cm = cil_geom.radius * 2.0
+        diam_mm = diam_cm * 10.0
+        es_int = es_cara_cilindrica_interna(cara_ref) if interna is None else bool(interna)
+
+        # Buscar el tipo de rosca ISO Métrica disponible
+        tipos = list(tdq.allThreadTypes)
+        tipo_iso = "ISO Metric profile"
+        if tipo_iso not in tipos:
+            for t in tipos:
+                if "metric" in t.lower() or "iso" in t.lower():
+                    tipo_iso = t
+                    break
+            else:
+                tipo_iso = tipos[0]
+
+        designacion = None
+        clase = None
+        try:
+            rec = tdq.recommendThreadData(diam_cm, es_int, tipo_iso)
+            if isinstance(rec, tuple) and len(rec) >= 3 and rec[0] and rec[1]:
+                designacion = rec[1]
+                clase = rec[2]
+        except:
+            pass
+
+        # Si recommendThreadData no encontró coincidencia exacta, busca el tamaño nominal más cercano en la tabla ISO
+        if not designacion:
+            tamanos = list(tdq.allSizes(tipo_iso))
+            def extraer_num(txt):
+                m = re.search(r"(\d+(?:\.\d+)?)", str(txt))
+                return float(m.group(1)) if m else 999.0
+            mejor_tam = min(tamanos, key=lambda s: abs(extraer_num(s) - diam_mm))
+            desigs = list(tdq.allDesignations(tipo_iso, mejor_tam))
+            designacion = desigs[0]
+            clases = list(tdq.allClasses(es_int, tipo_iso, designacion))
+            clase = clases[0]
+
+        t_info = tf.createThreadInfo(es_int, tipo_iso, designacion, clase)
+        col_caras = adsk.core.ObjectCollection.create()
+        for c in caras_objetivo:
+            col_caras.add(c)
+
+        t_in = tf.createInput(col_caras, t_info)
+        t_in.isFullLength = bool(paso_completo)
+        t_in.isModeled = bool(modelada)
+        return tf.add(t_in)
+
+    return {
+        "u": u,
+        "mm": u,
+        "features": rootComp.features,
+        "sketches": rootComp.sketches,
+        "planes": rootComp.constructionPlanes,
+        "axes": rootComp.constructionAxes,
+        "points": rootComp.constructionPoints,
+        "brep": adsk.fusion.TemporaryBRepManager.get(),
+        "exportMgr": design.exportManager,
+        "aplicar_rosca": aplicar_rosca,
+        "perforar_cruz_3d": perforar_cruz_3d,
+        "cortar_cilindro_3d": cortar_cilindro_3d,
+        "cortar_pasante": cortar_pasante
+    }
 
 
 def tomar_snapshot_escena(design):
@@ -1163,19 +1433,34 @@ def revertir_cambios_parciales(design, snap):
 def obtener_contexto_diseno(design, texto_seleccion):
     root = design.rootComponent
     cuerpos = []
+    agujeros_detectados = []
+
     for b in root.bRepBodies:
+        if not b.isVisible:
+            continue
         bb = b.boundingBox
-        dx = round((bb.maxPoint.x - bb.minPoint.x) * 10, 2)
-        dy = round((bb.maxPoint.y - bb.minPoint.y) * 10, 2)
-        dz = round((bb.maxPoint.z - bb.minPoint.z) * 10, 2)
-        cuerpos.append(f"'{b.name}' ({dx}x{dy}x{dz})")
-    
+        min_x, min_y, min_z = round(bb.minPoint.x * 10, 2), round(bb.minPoint.y * 10, 2), round(bb.minPoint.z * 10, 2)
+        max_x, max_y, max_z = round(bb.maxPoint.x * 10, 2), round(bb.maxPoint.y * 10, 2), round(bb.maxPoint.z * 10, 2)
+        dx, dy, dz = round(max_x - min_x, 2), round(max_y - min_y, 2), round(max_z - min_z, 2)
+        cx, cy, cz = round((min_x + max_x) / 2, 2), round((min_y + max_y) / 2, 2), round((min_z + max_z) / 2, 2)
+        cuerpos.append(
+            f"'{b.name}' [tamaño={dx}x{dy}x{dz}mm, min=({min_x},{min_y},{min_z}), max=({max_x},{max_y},{max_z}), centro=({cx},{cy},{cz})]"
+        )
+        for f in b.faces:
+            if "Cylinder" in f.geometry.objectType:
+                cil = adsk.core.Cylinder.cast(f.geometry)
+                r_mm = round(cil.radius * 10, 2)
+                ox, oy, oz = round(cil.origin.x * 10, 2), round(cil.origin.y * 10, 2), round(cil.origin.z * 10, 2)
+                tipo_c = "Agujero interno" if es_cara_cilindrica_interna(f) else "Cilindro externo"
+                agujeros_detectados.append(f"{tipo_c} R={r_mm}mm (D={round(r_mm*2,2)}mm) eje en ({ox},{oy},{oz})")
+
     bocetos = [s.name for s in root.sketches]
     params = [f"{p.name}={p.expression}" for p in design.userParameters]
-    
+
     return (
         f"ESTADO ACTUAL DEL ARCHIVO EN PANTALLA:\n"
-        f"- Cuerpos 3D ({len(cuerpos)}): {', '.join(cuerpos) if cuerpos else 'Ninguno'}\n"
+        f"- Cuerpos 3D ({len(cuerpos)}): {'; '.join(cuerpos) if cuerpos else 'Ninguno'}\n"
+        f"- Caras Cilíndricas / Agujeros ({len(agujeros_detectados)}): {'; '.join(agujeros_detectados[:8]) if agujeros_detectados else 'Ninguno'}\n"
         f"- Bocetos ({len(bocetos)}): {', '.join(bocetos) if bocetos else 'Ninguno'}\n"
         f"- Parámetros: {', '.join(params) if params else 'Ninguno'}\n"
         f"{texto_seleccion}\n"
@@ -1185,24 +1470,25 @@ def obtener_contexto_diseno(design, texto_seleccion):
 def obtener_system_prompt():
     return (
         "Eres un asistente experto de diseño mecánico en Autodesk Fusion 360 vía Python API.\n"
-        "REGLAS INTERNAS ESTRICTAS:\n"
-        "1. CONVERSIÓN DE UNIDADES: En el entorno ya existe la función `u(valor)` (y su alias `mm(valor)`) "
-        "que convierte milímetros a los centímetros internos de Fusion (`valor * 0.1`). "
-        "Usa SIEMPRE `u(...)` para todas las cotas, radios, coordenadas `Point3D.create(u(x), u(y), u(z))` y distancias de extrusión.\n"
-        "2. VARIABLES YA DEFINIDAS: `adsk`, `app`, `ui`, `design`, `rootComp`, `u`, `mm`, `math`, `sel`, `sel_faces`, `sel_edges`, `sel_bodies`, `sel_vertices`. "
-        "NO definas `def run(context):` ni cambies `defaultLengthUnits`.\n"
-        "3. INTERPRETACIÓN GEOMÉTRICA DIRECTA:\n"
-        "   - Si el usuario pide un cubo con 1 o 2 dimensiones (ej. 'cubo de 4' o 'cubo 4x4'), asume que mide 4x4x4 (ancho=4, profundo=4, alto=4).\n"
-        "   - Si pide un paralelepípedo o caja (ej. 'altura 4, ancho 5, largo 6'), crea el rectángulo en XY de `u(ancho)` por `u(largo)` y extrúyelo `u(altura)`.\n"
-        "   - Ejemplo exacto para crear un cubo o paralelepípedo en XY:\n"
-        "     `sk = rootComp.sketches.add(rootComp.xYConstructionPlane)`\n"
-        "     `sk.sketchCurves.sketchLines.addTwoPointRectangle(adsk.core.Point3D.create(0, 0, 0), adsk.core.Point3D.create(u(ancho), u(largo), 0))`\n"
-        "     `prof = sk.profiles.item(0)`\n"
-        "     `rootComp.features.extrudeFeatures.addSimple(prof, adsk.core.ValueInput.createByReal(u(altura)), adsk.fusion.FeatureOperations.NewBodyFeatureOperation)`\n"
-        "4. REGLAS ANTI-ERRORES DE LA API DE FUSION 360:\n"
-        "   - En un `Sketch` 2D, todos los puntos dibujados (`addByCenterRadius`, `addTwoPointRectangle`, `addByTwoPoints`) deben llevar Z=0: `adsk.core.Point3D.create(u(x), u(y), 0)`.\n"
-        "   - Para empalmes (fillets): `edgeCol = adsk.core.ObjectCollection.create()`, añade aristas con `edgeCol.add(e)`, luego `fillets = rootComp.features.filletFeatures`, `fInput = fillets.createInput()`, `fInput.addConstantRadiusEdgeSet(edgeCol, adsk.core.ValueInput.createByReal(u(radio)), True)`, `fillets.add(fInput)`.\n"
-        "   - Para chaflanes (chamfers): `chamfers = rootComp.features.chamferFeatures`, `cInput = chamfers.createInput2()`, `cInput.chamferEdgeSets.addEqualDistanceChamferEdgeSet(edgeCol, adsk.core.ValueInput.createByReal(u(dist)), False)`, `chamfers.add(cInput)`.\n"
+        "REGLAS INTERNAS ESTRICTAS Y KIT DE HERRAMIENTAS PREINSTALADO:\n"
+        "1. UNIDADES: Usa SIEMPRE `u(valor)` (o `mm(valor)`) para convertir milímetros a centímetros internos de Fusion (`valor * 0.1`).\n"
+        "2. VARIABLES Y KIT YA DEFINIDOS EN EL ENTORNO (NO LOS IMPORTES NI REDEFINAS):\n"
+        "   - Base: `adsk`, `app`, `ui`, `design`, `rootComp`, `features`, `sketches`, `planes`, `axes`, `points`, `brep` (TemporaryBRepManager), `exportMgr`, `u`, `mm`, `math`.\n"
+        "   - Selección mouse: `sel`, `sel_faces`, `sel_edges`, `sel_bodies`, `sel_vertices`.\n"
+        "3. SUPER-FUNCIONES NATIVAS PREINSTALADAS (ÚSALAS SIEMPRE QUE APLIQUEN):\n"
+        "   - ROSCAS / HILOS (`aplicar_rosca`): Cuando el usuario pida poner hilo o rosca a un agujero o cilindro, LLAMA DIRECTAMENTE a:\n"
+        "     `aplicar_rosca(modelada=True)` (detecta solo el agujero seleccionado o el agujero del cuerpo y modela la rosca 3D ISO sin fallar). "
+        "NUNCA uses `.item()` sobre `recommendThreadData`, `allSizes` ni `allDesignations` porque en Python son `tuple`.\n"
+        "   - AGUJERO EN CRUZ (`perforar_cruz_3d`): Cuando pidan un agujero en cruz que atraviese las 4 direcciones horizontales, LLAMA DIRECTAMENTE a:\n"
+        "     `perforar_cruz_3d(radio_mm=2.0, z_mm=None)` (calcula solo el centro exacto del cuerpo y perfora en X e Y).\n"
+        "   - PERFORACIÓN CILÍNDRICA 3D (`cortar_cilindro_3d`): Para perforar un agujero entre cualesquiera dos puntos 3D `(x1,y1,z1)` y `(x2,y2,z2)` en mm:\n"
+        "     `cortar_cilindro_3d((x1, y1, z1), (x2, y2, z2), radio_mm)`.\n"
+        "   - CORTE PASANTE SIMÉTRICO (`cortar_pasante`): Si creas un perfil en un `Sketch` para cortar un cuerpo de lado a lado, usa:\n"
+        "     `cortar_pasante(prof)` (corta simétricamente hacia ambos lados y nunca falla por dirección).\n"
+        "4. REGLAS ANTI-ERRORES DE BOCETOS Y CUERPOS:\n"
+        "   - Revisa siempre las coordenadas `min`, `max` y `centro` del cuerpo indicadas en el contexto antes de posicionar geometría.\n"
+        "   - En un objeto `Profile`, usa `profile.profileLoops` (NUNCA uses `sketchLoops`).\n"
+        "   - En el plano `xZConstructionPlane`, el eje Y del boceto 2D apunta hacia `-Z` del mundo 3D (`Point3D.create(u(x), u(-z), 0)`). Por eso, para agujeros laterales o en cruz prefiere SIEMPRE `cortar_cilindro_3d` o `perforar_cruz_3d`.\n"
         "5. SALIDA: Devuelve ÚNICAMENTE código Python puro ejecutable, sin bloques ```python ni texto explicativo."
     )
 
@@ -1220,11 +1506,11 @@ def limpiar_bloques_codigo(texto_codigo):
 
 
 # ==============================================================================
-# CONECTOR HTTP ATÓMICO (1 SOLA LLAMADA RÁPIDA DE <= 12 SEGUNDOS POR TURNO)
+# CONECTOR HTTP ATÓMICO (1 SOLA LLAMADA RÁPIDA DE <= 14 SEGUNDOS POR TURNO)
 # ==============================================================================
 def ejecutar_intento_unico_http(prov, clean_key, modelo, sys_prompt, ultimos):
     ctx_ssl = ssl.create_default_context()
-    ua_header = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Fusion360CAD/8.2"
+    ua_header = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Fusion360CAD/8.4"
     conn = None
 
     try:
@@ -1543,20 +1829,22 @@ class PaletteIncomingHandler(adsk.core.HTMLEventHandler):
                 etiqueta = datos.get("etiqueta", "")
 
                 vars_seleccion, _, total_sel = capturar_selecciones_mouse(ui)
-                conversor = lambda valor: float(valor) * 0.1
+                kit_cad = crear_kit_herramientas_cad(app, ui, design, design.rootComponent, vars_seleccion)
 
                 entorno = {
                     "adsk": adsk,
+                    "core": adsk.core,
+                    "fusion": adsk.fusion,
+                    "cam": adsk.cam,
                     "app": app,
                     "ui": ui,
                     "design": design,
                     "rootComp": design.rootComponent,
-                    "u": conversor,
-                    "mm": conversor,
                     "math": math,
                     "__builtins__": __builtins__
                 }
                 entorno.update(vars_seleccion)
+                entorno.update(kit_cad)
 
                 exec(codigo, entorno)
 
@@ -1590,6 +1878,8 @@ def limpiar_paneles_antiguos(ui):
         "MultiIAChatPalette_V7_ID",
         "MultiIAChatPalette_V8_ID",
         "MultiIAChatPalette_V81_ID",
+        "MultiIAChatPalette_V82_ID",
+        "MultiIAChatPalette_V83_ID",
         PALETTE_ID
     )
     for pid in ids_viejos:
@@ -1606,7 +1896,7 @@ def crear_panel_inicial(ui):
     cargar_pool_keys()
     cargar_biblioteca_macros()
 
-    ruta_html = os.path.join(CARPETA_SCRIPT, "chat_ui_v82.html")
+    ruta_html = os.path.join(CARPETA_SCRIPT, "chat_ui_v84.html")
     with open(ruta_html, "w", encoding="utf-8") as f:
         f.write(HTML_CONTENT)
 
@@ -1614,7 +1904,7 @@ def crear_panel_inicial(ui):
 
     palette = ui.palettes.add(
         PALETTE_ID,
-        "Chat Multi-IA CAD v8.2",
+        "Chat Multi-IA CAD v8.4",
         url_local,
         True,
         True,
@@ -1624,8 +1914,11 @@ def crear_panel_inicial(ui):
         True
     )
 
-    palette.dockingState = adsk.core.PaletteDockingStates.PaletteDockStateRight
     palette.isVisible = True
+    try:
+        palette.dockingState = adsk.core.PaletteDockingStates.PaletteDockStateRight
+    except:
+        pass
 
     onHTMLEvent = PaletteIncomingHandler()
     palette.incomingFromHTML.add(onHTMLEvent)
@@ -1676,6 +1969,8 @@ def run(context):
             "GeminiPaletteBtn_V7_ID",
             "GeminiPaletteBtn_V8_ID",
             "GeminiPaletteBtn_V81_ID",
+            "GeminiPaletteBtn_V82_ID",
+            "GeminiPaletteBtn_V83_ID",
             CMD_ID
         )
         for cid in ids_comandos:
@@ -1732,6 +2027,8 @@ def stop(context):
             "GeminiPaletteBtn_V7_ID",
             "GeminiPaletteBtn_V8_ID",
             "GeminiPaletteBtn_V81_ID",
+            "GeminiPaletteBtn_V82_ID",
+            "GeminiPaletteBtn_V83_ID",
             CMD_ID
         )
 
