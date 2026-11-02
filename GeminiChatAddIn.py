@@ -16,10 +16,10 @@ indice_rotacion = {p: 0 for p in PROVEEDORES_LISTA + ("auto",)}
 modelos_gemini_descubiertos = []
 keys_sin_saldo_o_invalidas = set()
 
-CMD_ID = "GeminiPaletteBtn_V84_ID"
+CMD_ID = "GeminiPaletteBtn_V85_ID"
 CMD_NAME = "Asistente Multi-IA CAD"
-CMD_DESC = "Muestra u oculta el panel lateral de modelado asistido por IA (v8.4 Full-Toolkit)"
-PALETTE_ID = "MultiIAChatPalette_V84_ID"
+CMD_DESC = "Muestra u oculta el panel lateral de modelado asistido por IA (v8.5 Full-Toolkit)"
+PALETTE_ID = "MultiIAChatPalette_V85_ID"
 
 CARPETA_USUARIO = os.path.expanduser("~")
 RUTA_PERMANENTE_JSON = os.path.join(CARPETA_USUARIO, ".fusion360_multi_ia_keys.json")
@@ -377,7 +377,7 @@ def obtener_modelos_gemini_activos(api_key):
         cabeceras = {
             "x-goog-api-key": api_key,
             "Connection": "close",
-            "User-Agent": "Fusion360CAD/8.4"
+            "User-Agent": "Fusion360CAD/8.5"
         }
         conn.request("GET", "/v1beta/models", headers=cabeceras)
         res = conn.getresponse()
@@ -420,7 +420,7 @@ def obtener_modelos_gemini_activos(api_key):
 
 
 # ==============================================================================
-# INTERFAZ GRÁFICA HTML/CSS/JS (v8.4 Full-Toolkit)
+# INTERFAZ GRÁFICA HTML/CSS/JS (v8.5 Full-Toolkit)
 # ==============================================================================
 HTML_CONTENT = r"""<!DOCTYPE html>
 <html lang="es">
@@ -430,7 +430,7 @@ HTML_CONTENT = r"""<!DOCTYPE html>
     * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
     body { margin: 0; padding: 10px; background: #22252a; color: #e8eaed; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
     .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 6px; border-bottom: 1px solid #3c4043; font-size: 12px; color: #9aa0a6; gap: 5px; }
-    .badge-v84 { background: #1a237e; color: #8c9eff; border: 1px solid #536dfe; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+    .badge-v85 { background: #1a237e; color: #8c9eff; border: 1px solid #536dfe; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; white-space: nowrap; }
     select { background: #181a1d; color: #e8eaed; border: 1px solid #3c4043; border-radius: 4px; padding: 4px 6px; font-size: 11px; flex: 1; outline: none; font-weight: 600; }
     select:focus { border-color: #0696d7; }
     .btn-small { background: #3c4043; color: #e8eaed; border: none; padding: 4px 7px; border-radius: 4px; cursor: pointer; font-size: 11px; white-space: nowrap; }
@@ -488,7 +488,7 @@ HTML_CONTENT = r"""<!DOCTYPE html>
 </head>
 <body>
     <div class="header">
-        <span class="badge-v84">v8.4 Full-Toolkit</span>
+        <span class="badge-v85">v8.5 Full-Toolkit</span>
         <select id="provider-select" onchange="cambiarProveedor()">
             <option value="gemini" selected>Google Gemini (Flash + Lite)</option>
             <option value="groq">⚡ Groq (Llama 3.3 70B / Gratis)</option>
@@ -519,7 +519,7 @@ HTML_CONTENT = r"""<!DOCTYPE html>
     <div id="chat-box">
         <div class="msg bot" id="welcome-msg"><span class="welcome-title">👋 Cómo usar el Asistente CAD:</span>1. Elige tu IA arriba o ejecuta directo una operación de la barra <b>📚 0-Tokens</b>.
 2. <b>Opcional:</b> Selecciona con el mouse caras, agujeros o aristas para modificarlos.
-3. En cualquier respuesta, abre <b>👁️ Ver Código Python</b> para auditar o guardar con <b>💾 Guardar 0-Tokens</b>.<div class="divider"></div><span class="updates-title">🚀 Novedades en v8.4 Full-Toolkit:</span><ul class="updates-list"><li><b>Motor Nativo de Roscas 3D (`aplicar_rosca`):</b> Crea hilos/roscas ISO reales en agujeros o pernos sin errores de tupla.</li><li><b>Perforación 3D Directa (`perforar_cruz_3d` / `cortar_pasante`):</b> Cortes pasantes simétricos y agujeros en cruz inmunes a ejes invertidos.</li><li><b>Telemetría Espacial Exacta:</b> La IA conoce el centro `(cx, cy, cz)` y todos los agujeros de tu pieza.</li></ul></div>
+3. En cualquier respuesta, abre <b>👁️ Ver Código Python</b> para auditar o guardar con <b>💾 Guardar 0-Tokens</b>.<div class="divider"></div><span class="updates-title">🚀 Novedades en v8.5 Full-Toolkit:</span><ul class="updates-list"><li><b>Inicio Protegido (`startupCompleted`):</b> Cero errores `pArea` al arrancar Fusion 360 con el complemento activado.</li><li><b>Motor Nativo de Roscas 3D (`aplicar_rosca`):</b> Crea hilos/roscas ISO reales en agujeros o pernos sin errores de tupla.</li><li><b>Perforación 3D Directa (`perforar_cruz_3d` / `cortar_pasante`):</b> Cortes pasantes simétricos y agujeros en cruz exactos.</li></ul></div>
     </div>
     <div class="input-area">
         <textarea id="prompt" placeholder="Selecciona algo con el mouse o escribe qué modelar..."></textarea>
@@ -1167,16 +1167,13 @@ def es_cara_cilindrica_interna(face):
         eva = face.evaluator
         _, param = eva.getParameterAtPoint(face.pointOnFace)
         _, normal = eva.getNormalAtParameter(param)
-        # Vector desde el origen del eje del cilindro hacia el punto en la cara
         vec_radial = cil.origin.vectorTo(face.pointOnFace)
-        # Proyectar perpendicularmente al eje del cilindro
         eje = cil.axis.copy()
         eje.normalize()
         comp_axial = eje.copy()
         comp_axial.scaleBy(vec_radial.dotProduct(eje))
         vec_perp = vec_radial.copy()
         vec_perp.subtract(comp_axial)
-        # Si la normal de la cara apunta hacia adentro (opuesta al radio), es un agujero interno
         return normal.dotProduct(vec_perp) < 0
     except:
         return True
@@ -1255,17 +1252,14 @@ def crear_kit_herramientas_cad(app, ui, design, rootComp, vars_seleccion):
         margen = max(max_x - min_x, max_y - min_y, 20.0) + 10.0
 
         tbm = adsk.fusion.TemporaryBRepManager.get()
-        # Cilindro a lo largo del eje X (atraviesa caras izquierda y derecha)
         p1_x = adsk.core.Point3D.create(u(cx - margen), u(cy), u(cz))
         p2_x = adsk.core.Point3D.create(u(cx + margen), u(cy), u(cz))
         cil_x = tbm.createCylinderOrCone(p1_x, u(radio_mm), p2_x, u(radio_mm))
 
-        # Cilindro a lo largo del eje Y (atraviesa caras frontal y trasera)
         p1_y = adsk.core.Point3D.create(u(cx), u(cy - margen), u(cz))
         p2_y = adsk.core.Point3D.create(u(cx), u(cy + margen), u(cz))
         cil_y = tbm.createCylinderOrCone(p1_y, u(radio_mm), p2_y, u(radio_mm))
 
-        # Unir ambos cilindros en una sola cruz 3D y perforar el cuerpo de una sola vez
         tbm.booleanOperation(cil_x, cil_y, adsk.fusion.BooleanTypes.UnionBooleanType)
         cortar_con_cuerpo_temporal(cil_x, b_dest)
         return b_dest
@@ -1289,25 +1283,21 @@ def crear_kit_herramientas_cad(app, ui, design, rootComp, vars_seleccion):
         tdq = tf.threadDataQuery
         caras_objetivo = []
 
-        # 1. Si se pasó una BRepFace directamente
         if cara_o_radio_mm is not None and hasattr(cara_o_radio_mm, "geometry"):
             if "Cylinder" in cara_o_radio_mm.geometry.objectType:
                 caras_objetivo.append(cara_o_radio_mm)
 
-        # 2. Si el usuario seleccionó caras con el mouse
         if not caras_objetivo and len(sel_faces) > 0:
             for f in sel_faces:
                 if "Cylinder" in f.geometry.objectType:
                     caras_objetivo.append(f)
 
-        # 3. Si el usuario seleccionó un borde circular con el mouse
         if not caras_objetivo and len(sel_edges) > 0:
             for e in sel_edges:
                 for f in e.faces:
                     if "Cylinder" in f.geometry.objectType and f not in caras_objetivo:
                         caras_objetivo.append(f)
 
-        # 4. Búsqueda automática de agujeros cilíndricos en los cuerpos actuales
         if not caras_objetivo:
             internas = []
             externas = []
@@ -1326,7 +1316,6 @@ def crear_kit_herramientas_cad(app, ui, design, rootComp, vars_seleccion):
                         else:
                             externas.append(f)
             if internas:
-                # Si el agujero está dividido en mitades pero comparte el mismo radio y eje, toma la mayor cara interna
                 internas.sort(key=lambda x: x.area, reverse=True)
                 caras_objetivo.append(internas[0])
             elif externas:
@@ -1342,7 +1331,6 @@ def crear_kit_herramientas_cad(app, ui, design, rootComp, vars_seleccion):
         diam_mm = diam_cm * 10.0
         es_int = es_cara_cilindrica_interna(cara_ref) if interna is None else bool(interna)
 
-        # Buscar el tipo de rosca ISO Métrica disponible
         tipos = list(tdq.allThreadTypes)
         tipo_iso = "ISO Metric profile"
         if tipo_iso not in tipos:
@@ -1363,7 +1351,6 @@ def crear_kit_herramientas_cad(app, ui, design, rootComp, vars_seleccion):
         except:
             pass
 
-        # Si recommendThreadData no encontró coincidencia exacta, busca el tamaño nominal más cercano en la tabla ISO
         if not designacion:
             tamanos = list(tdq.allSizes(tipo_iso))
             def extraer_num(txt):
@@ -1510,7 +1497,7 @@ def limpiar_bloques_codigo(texto_codigo):
 # ==============================================================================
 def ejecutar_intento_unico_http(prov, clean_key, modelo, sys_prompt, ultimos):
     ctx_ssl = ssl.create_default_context()
-    ua_header = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Fusion360CAD/8.4"
+    ua_header = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Fusion360CAD/8.5"
     conn = None
 
     try:
@@ -1880,33 +1867,49 @@ def limpiar_paneles_antiguos(ui):
         "MultiIAChatPalette_V81_ID",
         "MultiIAChatPalette_V82_ID",
         "MultiIAChatPalette_V83_ID",
+        "MultiIAChatPalette_V84_ID",
         PALETTE_ID
     )
     for pid in ids_viejos:
-        old_p = ui.palettes.itemById(pid)
-        if old_p:
-            try:
+        try:
+            old_p = ui.palettes.itemById(pid)
+            if old_p:
                 old_p.deleteMe()
-            except:
-                pass
+        except:
+            pass
 
 
-def crear_panel_inicial(ui):
+def mostrar_y_acoplar_panel_seguro(palette):
+    """Muestra y acopla el panel protegiendo cada llamada contra errores pArea durante el arranque."""
+    if not palette:
+        return
+    try:
+        palette.dockingState = adsk.core.PaletteDockingStates.PaletteDockStateRight
+    except:
+        pass
+    try:
+        palette.isVisible = True
+    except:
+        pass
+
+
+def crear_panel_inicial(ui, mostrar_ahora=True):
     limpiar_paneles_antiguos(ui)
     cargar_pool_keys()
     cargar_biblioteca_macros()
 
-    ruta_html = os.path.join(CARPETA_SCRIPT, "chat_ui_v84.html")
+    ruta_html = os.path.join(CARPETA_SCRIPT, "chat_ui_v85.html")
     with open(ruta_html, "w", encoding="utf-8") as f:
         f.write(HTML_CONTENT)
 
     url_local = ruta_html.replace("\\", "/")
 
+    # IMPORTANTE: isVisible=False al crear la paleta para nunca disparar InternalValidationError: pArea
     palette = ui.palettes.add(
         PALETTE_ID,
-        "Chat Multi-IA CAD v8.4",
+        "Chat Multi-IA CAD v8.5",
         url_local,
-        True,
+        False,
         True,
         True,
         385,
@@ -1914,24 +1917,58 @@ def crear_panel_inicial(ui):
         True
     )
 
-    palette.isVisible = True
-    try:
-        palette.dockingState = adsk.core.PaletteDockingStates.PaletteDockStateRight
-    except:
-        pass
-
+    # Conectamos el manejador HTML ANTES de intentar mostrar o acoplar la ventana
     onHTMLEvent = PaletteIncomingHandler()
     palette.incomingFromHTML.add(onHTMLEvent)
     handlers.append(onHTMLEvent)
+
+    if mostrar_ahora:
+        mostrar_y_acoplar_panel_seguro(palette)
+
     return palette
 
 
 def alternar_panel_desde_boton(ui):
-    palette = ui.palettes.itemById(PALETTE_ID)
+    palette = None
+    try:
+        palette = ui.palettes.itemById(PALETTE_ID)
+    except:
+        palette = None
+
     if not palette:
-        crear_panel_inicial(ui)
+        try:
+            crear_panel_inicial(ui, mostrar_ahora=True)
+        except:
+            pass
     else:
-        palette.isVisible = not palette.isVisible
+        try:
+            nuevo_estado = not palette.isVisible
+            palette.isVisible = nuevo_estado
+            if nuevo_estado:
+                try:
+                    if palette.dockingState == adsk.core.PaletteDockingStates.PaletteDockStateFloating:
+                        palette.dockingState = adsk.core.PaletteDockingStates.PaletteDockStateRight
+                except:
+                    pass
+        except:
+            pass
+
+
+class StartupCompletedHandler(adsk.core.ApplicationEventHandler):
+    """Se dispara automáticamente cuando Fusion 360 termina de cargar toda su interfaz al arrancar."""
+    def __init__(self):
+        super().__init__()
+    def notify(self, args):
+        try:
+            app = adsk.core.Application.get()
+            ui = app.userInterface
+            palette = ui.palettes.itemById(PALETTE_ID)
+            if not palette:
+                crear_panel_inicial(ui, mostrar_ahora=True)
+            else:
+                mostrar_y_acoplar_panel_seguro(palette)
+        except:
+            pass
 
 
 class ShowPaletteCommandExecuteHandler(adsk.core.CommandEventHandler):
@@ -1971,15 +2008,16 @@ def run(context):
             "GeminiPaletteBtn_V81_ID",
             "GeminiPaletteBtn_V82_ID",
             "GeminiPaletteBtn_V83_ID",
+            "GeminiPaletteBtn_V84_ID",
             CMD_ID
         )
         for cid in ids_comandos:
-            old_cmd = ui.commandDefinitions.itemById(cid)
-            if old_cmd:
-                try:
+            try:
+                old_cmd = ui.commandDefinitions.itemById(cid)
+                if old_cmd:
                     old_cmd.deleteMe()
-                except:
-                    pass
+            except:
+                pass
 
         cmdDef = ui.commandDefinitions.addButtonDefinition(CMD_ID, CMD_NAME, CMD_DESC, carpeta_res)
         onCreated = ShowPaletteCommandCreatedHandler()
@@ -1990,9 +2028,12 @@ def run(context):
             panel = ui.allToolbarPanels.itemById(panel_id)
             if panel:
                 for cid in ids_comandos:
-                    cntrl = panel.controls.itemById(cid)
-                    if cntrl:
-                        cntrl.deleteMe()
+                    try:
+                        cntrl = panel.controls.itemById(cid)
+                        if cntrl:
+                            cntrl.deleteMe()
+                    except:
+                        pass
                 btn = panel.controls.addCommand(cmdDef)
                 btn.isPromoted = True
                 btn.isPromotedByDefault = True
@@ -2000,12 +2041,34 @@ def run(context):
         qat = ui.toolbars.itemById("QAT")
         if qat:
             for cid in ids_comandos:
-                cntrl_qat = qat.controls.itemById(cid)
-                if cntrl_qat:
-                    cntrl_qat.deleteMe()
+                try:
+                    cntrl_qat = qat.controls.itemById(cid)
+                    if cntrl_qat:
+                        cntrl_qat.deleteMe()
+                except:
+                    pass
             qat.controls.addCommand(cmdDef)
 
-        crear_panel_inicial(ui)
+        # Registrar evento startupCompleted por si Fusion 360 recién está abriendo
+        try:
+            onStartup = StartupCompletedHandler()
+            app.startupCompleted.add(onStartup)
+            handlers.append(onStartup)
+        except:
+            pass
+
+        # Si Fusion 360 ya terminó de cargar, abrimos el panel de inmediato; si no, lo creamos oculto
+        listo_para_mostrar = True
+        try:
+            if hasattr(app, "isStartupComplete") and not app.isStartupComplete:
+                listo_para_mostrar = False
+        except:
+            pass
+
+        try:
+            crear_panel_inicial(ui, mostrar_ahora=listo_para_mostrar)
+        except:
+            pass
 
     except:
         if ui:
@@ -2029,6 +2092,7 @@ def stop(context):
             "GeminiPaletteBtn_V81_ID",
             "GeminiPaletteBtn_V82_ID",
             "GeminiPaletteBtn_V83_ID",
+            "GeminiPaletteBtn_V84_ID",
             CMD_ID
         )
 
@@ -2036,21 +2100,30 @@ def stop(context):
             panel = ui.allToolbarPanels.itemById(panel_id)
             if panel:
                 for cid in ids_comandos:
-                    cntrl = panel.controls.itemById(cid)
-                    if cntrl:
-                        cntrl.deleteMe()
+                    try:
+                        cntrl = panel.controls.itemById(cid)
+                        if cntrl:
+                            cntrl.deleteMe()
+                    except:
+                        pass
 
         qat = ui.toolbars.itemById("QAT")
         if qat:
             for cid in ids_comandos:
-                cntrl_qat = qat.controls.itemById(cid)
-                if cntrl_qat:
-                    cntrl_qat.deleteMe()
+                try:
+                    cntrl_qat = qat.controls.itemById(cid)
+                    if cntrl_qat:
+                        cntrl_qat.deleteMe()
+                except:
+                    pass
 
         for cid in ids_comandos:
-            cmdDef = ui.commandDefinitions.itemById(cid)
-            if cmdDef:
-                cmdDef.deleteMe()
+            try:
+                cmdDef = ui.commandDefinitions.itemById(cid)
+                if cmdDef:
+                    cmdDef.deleteMe()
+            except:
+                pass
     except:
         if ui:
             ui.messageBox(f"Error al cerrar el panel:\n{traceback.format_exc()}")
